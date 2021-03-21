@@ -150,10 +150,13 @@ root.append(body)
 date_label = Label(normal_font, text="", max_glyphs=32, x=0, y=64, color=WHITE)
 body.append(date_label)
 
-fav = Button(
+details_label = Label(normal_font, text="", max_glyphs=500, line_spacing=0.9, x=0, y=82, color=WHITE)
+body.append(details_label)
+
+fav_button = Button(
     id="fav",
     x=0,
-    y=74,
+    y=200,
     width=160,
     height=40,
     style=Button.RECT,
@@ -167,9 +170,9 @@ fav = Button(
     selected_label=WHITE,
     icon=heart_off_icon,
 )
-body.append(fav.group)
+body.append(fav_button.group)
 
-buttons = [fav]
+buttons = [fav_button]
 
 # try:
 #     dbf = open("mydb", "r+b")
@@ -312,14 +315,44 @@ def switch_rom(new_name, fav_check=True):
 
     rom_name = new_name
     rom_label.text = wrap(rom_name or "(none)", 28, 3)[:90]
+    details_label.text = ""
 
     if core_name and rom_name and fav_check:
-        channel.write(["favchk", "dbchk", "fav/" + core_name, rom_name])
+        channel.write(["rom_keys", "dbkeys", rom_name])
 
 def switch_date(date):
     global date_label
 
     date_label.text = date[:32]
+
+def process_keys(keys):
+    global core_name, fav_button, heart_on_icon, heart_off_icon, rom_fav, details_label
+
+    has_key = "has/" + core_name + "/"
+    hases = {}
+
+    fav_key = "fav/" + core_name
+    fav = False
+
+    for key in keys:
+        if key == fav_key:
+            fav = True
+        elif key.startswith(has_key):
+            bits = key[len(has_key):].split("/")
+            if len(bits) >= 2:
+                if bits[0] not in hases:
+                    hases[bits[0]] = []
+                hases[bits[0]].append(bits[1])
+    
+    rom_fav = fav
+    fav_button.icon = heart_on_icon if fav else heart_off_icon
+
+    details = []
+    for key, value in hases.items():
+        line = key + ": " + ", ".join(value)
+        details.append(wrap(line, 32, 10))
+
+    details_label.text = "\n".join(details)
 
 switch_core("MENU")
 switch_rom("", False)
@@ -337,13 +370,13 @@ def handle_button_press(id):
     if id == "fav":
         if rom_name:
             if rom_fav:
-                channel.write(["favdel", "dbdel", "fav/" + core_name, rom_name])
+                channel.write(["fav_del", "dbdel", "fav/" + core_name, rom_name])
                 rom_fav = False
-                fav.icon = heart_off_icon
+                fav_button.icon = heart_off_icon
             else:
-                channel.write(["favput", "dbput", "fav/" + core_name, rom_name])
+                channel.write(["fav_put", "dbput", "fav/" + core_name, rom_name])
                 rom_fav = True
-                fav.icon = heart_on_icon
+                fav_button.icon = heart_on_icon
     # elif id == "get":
     #     # channel.write(["date", "proc", "date"])
     #     channel.write(["dbget", "dbget", "TESTING"])
@@ -423,10 +456,8 @@ while True:
                 switch_date("Got " + str(len(command) - 1) + " records")
             elif command[0] == "dbchk":
                 switch_date("Got " + command[1])
-            elif command[0] == "favchk":
-                switch_date("Fav " + command[1])
-                rom_fav = (command[1] == "1")
-                fav.icon = heart_on_icon if rom_fav else heart_off_icon
+            elif command[0] == "rom_keys":
+                process_keys(command[1:])
     
     # tick_count += 1
     # if tick_count == 80:
