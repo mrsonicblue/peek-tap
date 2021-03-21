@@ -88,6 +88,25 @@ if mcp is not None:
 
     kbd = Keyboard(usb_hid.devices)
 
+def wrap(s, max_chars, max_lines):
+    s = s.replace('\n', '').replace('\r', '')
+    words = s.split(' ')
+    lines = []
+    line = []
+    count = 0
+    for w in words:
+        w = w[:max_chars]
+        wl = len(w)
+        if count + wl > max_chars:
+            lines.append(line)
+            line = []
+            count = 0
+        line.append(w)
+        count += wl + 1
+    lines.append(line)
+    lines = list(map(lambda w: " ".join(w), lines))
+    return '\n'.join(lines[:max_lines])
+
 display = board.DISPLAY
 display.rotation = 90
 
@@ -109,34 +128,34 @@ heart_off_icon = load_icon("/icons/heart-grey.bmp")
 header = displayio.Group(max_size=10)
 root.append(header)
 
-core_label = Label(normal_font, text="", max_glyphs=32, x=20, y=7, color=WHITE)
+core_label = Label(normal_font, text="", max_glyphs=28, x=20, y=7, color=WHITE)
 header.append(core_label)
 
 rom_icon = adafruit_imageload.load("/icons/cartridge.bmp", bitmap=displayio.Bitmap, palette=displayio.Palette)
 rom_sprite = displayio.TileGrid(rom_icon[0], pixel_shader=rom_icon[1], x=0, y=18)
 header.append(rom_sprite)
 
-rom_label = Label(normal_font, text="", max_glyphs=32, x=20, y=25, color=WHITE)
+rom_label = Label(normal_font, text="", max_glyphs=90, line_spacing=0.9, x=20, y=25, color=WHITE)
 header.append(rom_label)
 
 rule_bitmap = displayio.Bitmap(160, 1, 1)
 rule_palette = displayio.Palette(1)
 rule_palette[0] = GREY
-rule_sprite = displayio.TileGrid(rule_bitmap, pixel_shader=rule_palette, x=0, y=35)
+rule_sprite = displayio.TileGrid(rule_bitmap, pixel_shader=rule_palette, x=0, y=55)
 header.append(rule_sprite)
 
 body = displayio.Group(max_size=20)
 root.append(body)
 
-date_label = Label(normal_font, text="", max_glyphs=32, x=0, y=41, color=WHITE)
+date_label = Label(normal_font, text="", max_glyphs=32, x=0, y=64, color=WHITE)
 body.append(date_label)
 
 fav = Button(
     id="fav",
     x=0,
-    y=52,
-    width=78,
-    height=22,
+    y=74,
+    width=160,
+    height=40,
     style=Button.RECT,
     fill_color=BUTTON1,
     selected_fill=BUTTON2,
@@ -272,7 +291,7 @@ def switch_core(new_name):
     global core_name, header, core_label, core_sprite, core_icon
 
     core_name = new_name
-    core_label.text = core_name[:32] or "(none)"
+    core_label.text = core_name[:28] or "(none)"
     
     if core_sprite is not None:
         header.remove(core_sprite)
@@ -292,7 +311,7 @@ def switch_rom(new_name, fav_check=True):
     global channel, core_name, rom_name, rom_label
 
     rom_name = new_name
-    rom_label.text = rom_name[:32] or "(none)"
+    rom_label.text = wrap(rom_name or "(none)", 28, 3)[:90]
 
     if core_name and rom_name and fav_check:
         channel.write(["favchk", "dbchk", "fav/" + core_name, rom_name])
