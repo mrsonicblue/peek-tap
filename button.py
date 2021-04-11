@@ -65,12 +65,8 @@ class Button():
                   Defaults to RECT.
     :param fill_color: The color to fill the button. Defaults to 0xFFFFFF.
     :param outline_color: The color of the outline of the button.
-    :param label: The text that appears inside the button. Defaults to not displaying the label.
-    :param label_font: The button label font.
-    :param label_color: The color of the button label text. Defaults to 0x0.
     :param selected_fill: Inverts the fill color.
     :param selected_outline: Inverts the outline color.
-    :param selected_label: Inverts the label color.
 
     """
     RECT = const(0)
@@ -80,30 +76,24 @@ class Button():
 
     def __init__(self, *, id, x, y, width, height, name=None, style=RECT,
                  fill_color=0xFFFFFF, outline_color=0x0,
-                 label=None, label_font=None, label_color=0x0,
                  selected_fill=None, selected_outline=None,
-                 selected_label=None, icon=None):
+                 icon=None):
         self.id = id
         self.x = x
         self.y = y
         self.width = width
         self.height = height
-        self._font = label_font
         self._selected = False
         self.group = displayio.Group()
         self.name = name
-        self._label = label
-        self._icon = icon
+        self.icon = icon
         self.body = self.fill = self.shadow = None
 
         self.fill_color = _check_color(fill_color)
         self.outline_color = _check_color(outline_color)
-        self._label_color = label_color
-        self._label_font = label_font
         # Selecting inverts the button colors!
         self.selected_fill = _check_color(selected_fill)
         self.selected_outline = _check_color(selected_outline)
-        self.selected_label = _check_color(selected_label)
 
         if self.selected_fill is None and fill_color is not None:
             self.selected_fill = (~self.fill_color) & 0xFFFFFF
@@ -131,71 +121,15 @@ class Button():
                 self.group.append(self.shadow)
             self.group.append(self.body)
 
-        self.icon = icon
-        self.label = label
+        icon_width = 18
+        icon_height = 16
 
-        # else: # ok just a bounding box
-        # self.bodyshape = displayio.Shape(width, height)
-        # self.group.append(self.bodyshape)
+        self.icon.x = self.x + (self.width - icon_width) // 2
+        self.icon.y = self.y + (self.height - icon_height) // 2
+        self.group.append(self.icon)
 
-    def _position_label(self):
-        if not self._label or not isinstance(self._label, Label):
-            return
-        
-        dims = self._label.bounding_box
-        iconw = self._icon_bitmap.width if self._icon_bitmap else 0
-        if dims[2] >= (self.width - iconw) or dims[3] >= self.height:
-            raise RuntimeError("Button not large enough for label")
-        self._label.x = self.x + iconw + (self.width - iconw - dims[2]) // 2
-        self._label.y = self.y + self.height // 2
-        self._label.color = self._label_color
-
-    @property
-    def label(self):
-        """The text label of the button"""
-        return self._label.text
-
-    @label.setter
-    def label(self, newtext):
-        if self._label and (self._label in self.group):
-            self.group.remove(self._label)
-
-        self._label = None
-        if not newtext or (self._label_color is None):  # no new text
-            return     # nothing to do!
-
-        if not self._label_font:
-            raise RuntimeError("Please provide label font")
-        self._label = Label(self._label_font, text=newtext)
-        self._position_label()
-        self.group.append(self._label)
-
-        if (self.selected_label is None) and (self._label_color is not None):
-            self.selected_label = (~self._label_color) & 0xFFFFFF
-
-    @property
-    def icon(self):
-        """The text label of the button"""
-        return self._icon.text
-
-    @icon.setter
-    def icon(self, newicon):
-        if self._icon and (self._icon in self.group):
-            self.group.remove(self._icon)
-
-        self._icon = None
-        self._icon_bitmap = None
-        if not newicon:  # no new icon
-            return     # nothing to do!
-
-        self._icon = displayio.TileGrid(newicon[0], pixel_shader=newicon[1], x=0, y=0)
-        self._icon_bitmap = newicon[0]
-        if self._icon_bitmap.width >= self.width or self._icon_bitmap.height >= self.height:
-            raise RuntimeError("Button not large enough for label")
-        self._icon.x = self.x + 2
-        self._icon.y = self.y + (self.height - self._icon_bitmap.height) // 2
-        self.group.append(self._icon)
-        self._position_label()
+    def set_icon_tile(self, tile):
+        self.icon[0] = tile
 
     @property
     def selected(self):
@@ -210,17 +144,13 @@ class Button():
         if self._selected:
             new_fill = self.selected_fill
             new_out = self.selected_outline
-            new_label = self.selected_label
         else:
             new_fill = self.fill_color
             new_out = self.outline_color
-            new_label = self._label_color
         # update all relevant colros!
         if self.body is not None:
             self.body.fill = new_fill
             self.body.outline = new_out
-        if self._label is not None:
-            self._label.color = new_label
 
     def contains(self, point):
         """Used to determine if a point is contained within a button. For example,

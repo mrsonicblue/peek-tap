@@ -14,6 +14,7 @@ import usb_cdc
 import usb_hid
 import storage
 import sdcardio
+import render_bdf
 from adafruit_mcp230xx.mcp23008 import MCP23008
 from adafruit_hid.keyboard import Keyboard
 from adafruit_hid.keycode import Keycode
@@ -21,9 +22,9 @@ from adafruit_bitmap_font import bitmap_font
 from adafruit_display_shapes.circle import Circle
 from adafruit_display_shapes.rect import Rect
 from adafruit_display_shapes.roundrect import RoundRect
-from adafruit_display_text.label import Label
 from channel import Channel
 from button import Button
+from label import Label
 
 # spi = board.SPI()
 # sd_cs = board.SD_CS
@@ -38,8 +39,6 @@ from button import Button
 
 # while True:
 #     time.sleep(1)
-
-SCALE = 2
 
 WHITE = 0xFFFFFF
 GREY = 0x888888
@@ -60,7 +59,7 @@ def file_exists(path):
         return True
     except OSError:
         return False
-    
+
 def setup_pin(mcp, index):
     pin = mcp.get_pin(index)
     pin.direction = digitalio.Direction.INPUT
@@ -88,7 +87,7 @@ if mcp is not None:
 
     kbd = Keyboard(usb_hid.devices)
 
-def wrap(s, max_chars, max_lines):
+def wrap(s, max_chars, indent=0):
     s = s.replace('\n', '').replace('\r', '')
     words = s.split(' ')
     lines = []
@@ -104,148 +103,99 @@ def wrap(s, max_chars, max_lines):
         line.append(w)
         count += wl + 1
     lines.append(line)
-    lines = list(map(lambda w: " ".join(w), lines))
-    return '\n'.join(lines[:max_lines])
+    lines = list(map(lambda w: (" " * indent) + " ".join(w), lines))
+    return '\n'.join(lines)
 
 display = board.DISPLAY
 display.rotation = 90
 
-root = displayio.Group(max_size=10, scale=SCALE)
+root = displayio.Group(max_size=10)
 display.show(root)
 
-normal_font = bitmap_font.load_font("/fonts/lemon.bdf")
-normal_font.load_glyphs(b'0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-,.:/! ')
+palette_white = displayio.Palette(2)
+palette_white.make_transparent(0)
+palette_white[1] = WHITE
 
-def load_icon(path):
-    icon = adafruit_imageload.load(path, bitmap=displayio.Bitmap, palette=displayio.Palette)
-    icon[1].make_transparent(0)
-    return icon
+palette_grey = displayio.Palette(2)
+palette_white.make_transparent(0)
+palette_grey[1] = GREY
 
-rom_icon = load_icon("/icons/cartridge.bmp")
-heart_on_icon = load_icon("/icons/heart-red.bmp")
-heart_off_icon = load_icon("/icons/heart-grey.bmp")
+GLYPH_COUNT = 160
+GLYPH_WIDTH = 8
+GLYPH_HEIGHT = 17
+glyphs = displayio.Bitmap(GLYPH_COUNT * GLYPH_WIDTH, GLYPH_HEIGHT, 2)
+
+glyph_list = b'0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-,.:/!() '
+normal_map = render_bdf.render_bdf("/fonts/gohufont-14.bdf", glyph_list, glyphs, GLYPH_WIDTH, GLYPH_HEIGHT, 1)
+bold_map = render_bdf.render_bdf("/fonts/gohufont-14b.bdf", glyph_list, glyphs, GLYPH_WIDTH, GLYPH_HEIGHT, len(normal_map) + 1)
+font_maps = [normal_map, bold_map]
+
+def label(text, x, y, width, height, palette=palette_white):
+    global glyphs, font_maps, GLYPH_WIDTH, GLYPH_HEIGHT
+    return Label(glyphs, pixel_shader=palette, font_maps=font_maps, text=text, width=width, height=height, tile_width=GLYPH_WIDTH, tile_height=GLYPH_HEIGHT, x=x, y=y)
+
+icons = adafruit_imageload.load("icons.bmp", bitmap=displayio.Bitmap, palette=displayio.Palette)
+icons[1].make_transparent(0)
+
+ICON_WIDTH = 18
+ICON_HEIGHT = 16
+icon_list = ['box','cartridge','generic','heart-grey','heart-red','GAMEBOY', "GBA",'Genesis','MENU','NES','SNES','ATARI2600']
+icon_lookup = {k: v for v, k in enumerate(icon_list)}
+
+def icon_sprite(name, x=0, y=0):
+    global icons, icon_lookup, ICON_WIDTH, ICON_HEIGHT
+    tile = icon_lookup[name]
+    return displayio.TileGrid(icons[0], pixel_shader=icons[1], default_tile=tile, x=x, y=y, tile_width=ICON_WIDTH, tile_height=ICON_HEIGHT)
+
+doubler = displayio.Group(max_size=10, scale=2)
+root.append(doubler)
 
 header = displayio.Group(max_size=10)
 root.append(header)
 
-core_label = Label(normal_font, text="", max_glyphs=28, x=20, y=7, color=WHITE)
-header.append(core_label)
+core_sprite = icon_sprite("MENU", x=0, y=1)
+doubler.append(core_sprite)
 
-rom_icon = adafruit_imageload.load("/icons/cartridge.bmp", bitmap=displayio.Bitmap, palette=displayio.Palette)
-rom_sprite = displayio.TileGrid(rom_icon[0], pixel_shader=rom_icon[1], x=0, y=18)
-header.append(rom_sprite)
+core_label = label("", x=19, y=0, width=17, height=1)
+doubler.append(core_label)
 
-rom_label = Label(normal_font, text="", max_glyphs=90, line_spacing=0.9, x=20, y=25, color=WHITE)
+rom_sprite = icon_sprite("cartridge", x=0, y=18)
+doubler.append(rom_sprite)
+
+rom_label = label("", x=38, y=34, width=35, height=2)
 header.append(rom_label)
 
-rule_bitmap = displayio.Bitmap(160, 1, 1)
+rule_bitmap = displayio.Bitmap(320, 1, 1)
 rule_palette = displayio.Palette(1)
 rule_palette[0] = GREY
-rule_sprite = displayio.TileGrid(rule_bitmap, pixel_shader=rule_palette, x=0, y=55)
+rule_sprite = displayio.TileGrid(rule_bitmap, pixel_shader=rule_palette, x=0, y=76)
 header.append(rule_sprite)
 
 body = displayio.Group(max_size=20)
 root.append(body)
 
-date_label = Label(normal_font, text="", max_glyphs=32, x=0, y=64, color=WHITE)
+date_label = label("", x=0, y=80, width=40, height=1)
 body.append(date_label)
 
-details_label = Label(normal_font, text="", max_glyphs=500, line_spacing=0.9, x=0, y=82, color=WHITE)
+details_label = label("", x=0, y=100, width=40, height=18)
 body.append(details_label)
 
 fav_button = Button(
     id="fav",
     x=0,
-    y=200,
-    width=160,
-    height=40,
+    y=206,
+    width=34,
+    height=34,
     style=Button.RECT,
     fill_color=BUTTON1,
     selected_fill=BUTTON2,
     outline_color=WHITE,
     selected_outline=WHITE,
-    label="Favorite",
-    label_font=normal_font,
-    label_color=WHITE,
-    selected_label=WHITE,
-    icon=heart_off_icon,
+    icon = icon_sprite("heart-grey")
 )
-body.append(fav_button.group)
+doubler.append(fav_button.group)
 
 buttons = [fav_button]
-
-# try:
-#     dbf = open("mydb", "r+b")
-# except OSError:
-#     dbf = open("mydb", "w+b")
-
-# db = btree.open(f)
-
-# # The keys you add will be sorted internally in the database
-# db[b"3"] = b"three"
-# db[b"1"] = b"one"
-# db[b"2"] = b"two"
-
-# # Assume that any changes are cached in memory unless
-# # explicitly flushed (or database closed). Flush database
-# # at the end of each "transaction".
-# db.flush()
-
-# # Prints b'two'
-# print(db[b"2"])
-
-# # Iterate over sorted keys in the database, starting from b"2"
-# # until the end of the database, returning only values.
-# # Mind that arguments passed to values() method are *key* values.
-# # Prints:
-# #   b'two'
-# #   b'three'
-# for word in db.values(b"2"):
-#     print(word)
-
-# del db[b"2"]
-
-# # No longer true, prints False
-# print(b"2" in db)
-
-# # Prints:
-# #  b"1"
-# #  b"3"
-# for key in db:
-#     print(key)
-
-# db.close()
-
-# # Don't forget to close the underlying stream!
-# dbf.close()
-
-# end_of_record = bytes([0x7f, 0x45, 0x4c, 0x46, 0x01, 0x01, 0x01, 0x00])
-
-# try:
-#     if hasattr(board, "TFT_BACKLIGHT"):
-#         backlight = pwmio.PWMOut(
-#             board.TFT_BACKLIGHT
-#         )  # pylint: disable=no-member
-#     elif hasattr(board, "TFT_LITE"):
-#         self._backlight = pwmio.PWMOut(
-#             board.TFT_LITE
-#         )  # pylint: disable=no-member
-# except ValueError:
-#     self._backlight = None
-# self.set_backlight(1.0)  # turn on backlight
-
-## os.stat("/pyportal_startup.bmp")
-## for i in range(100, -1, -1):  # dim down
-##     self.set_backlight(i / 100)
-##     time.sleep(0.005)
-
-# button1 = digitalio.DigitalInOut(board.D3)
-# button1.direction = digitalio.Direction.INPUT
-# button1.pull = digitalio.Pull.UP
-
-# button2 = digitalio.DigitalInOut(board.D4)
-# button2.direction = digitalio.Direction.INPUT
-# button2.pull = digitalio.Pull.UP
 
 touch = adafruit_touchscreen.Touchscreen(
     board.TOUCH_XL,
@@ -258,63 +208,22 @@ touch = adafruit_touchscreen.Touchscreen(
 
 channel = Channel(usb_cdc.serials[1])
 
-# if True:
-#     display = board.DISPLAY
-
-#     root = displayio.Group(max_size=15)
-#     display.show(root)
-
-#     bg_file = open("pyportal_startup.bmp", "rb")
-#     background = displayio.OnDiskBitmap(bg_file)
-#     bg_sprite = displayio.TileGrid(
-#         background,
-#         pixel_shader=displayio.ColorConverter(),
-#         x=0,
-#         y=0,
-#     )
-#     root.append(bg_sprite)
-
-# self.set_background("/pyportal_startup.bmp")
-# try:
-#     self.display.refresh(target_frames_per_second=60)
-# except AttributeError:
-#     self.display.wait_for_frame()
-# for i in range(100):  # dim up
-#     self.set_backlight(i / 100)
-#     time.sleep(0.005)
-# time.sleep(2)
-
-core_name = "Menu"
+core_name = "MENU"
 rom_name = None
 rom_fav = False
-core_sprite = None
-core_icon = None
 
 def switch_core(new_name):
-    global core_name, header, core_label, core_sprite, core_icon
+    global core_name, header, core_label, core_sprite, icon_lookup
 
     core_name = new_name
-    core_label.text = core_name[:28] or "(none)"
-    
-    if core_sprite is not None:
-        header.remove(core_sprite)
-        del core_sprite
-        del core_icon
-        gc.collect()
-    
-    icon_path = "/icons/cores/" + core_name + ".bmp"
-    if not file_exists(icon_path):
-        icon_path = "/icons/generic.bmp"
-
-    core_icon = adafruit_imageload.load(icon_path, bitmap=displayio.Bitmap, palette=displayio.Palette)
-    core_sprite = displayio.TileGrid(core_icon[0], pixel_shader=core_icon[1], x=0, y=0)
-    header.append(core_sprite)
+    core_label.text = '\1' + (core_name or "(none)")
+    core_sprite[0] = icon_lookup[core_name] if core_name in icon_lookup else icon_lookup["generic"]
 
 def switch_rom(new_name, fav_check=True):
     global channel, core_name, rom_name, rom_label
 
     rom_name = new_name
-    rom_label.text = wrap(rom_name or "(none)", 28, 3)[:90]
+    rom_label.text = wrap(rom_name or "(none)", 35)
     details_label.text = ""
 
     if core_name and rom_name and fav_check:
@@ -323,7 +232,7 @@ def switch_rom(new_name, fav_check=True):
 def switch_date(date):
     global date_label
 
-    date_label.text = date[:32]
+    date_label.text = date
 
 def process_keys(keys):
     global core_name, fav_button, heart_on_icon, heart_off_icon, rom_fav, details_label
@@ -349,8 +258,8 @@ def process_keys(keys):
 
     details = []
     for key, value in hases.items():
-        line = key + ": " + ", ".join(value)
-        details.append(wrap(line, 32, 10))
+        details.append("\1" + key)
+        details.append("\0" + wrap(", ".join(value), 38, 2))
 
     details_label.text = "\n".join(details)
 
@@ -372,11 +281,11 @@ def handle_button_press(id):
             if rom_fav:
                 channel.write(["fav_del", "dbdel", "fav/" + core_name, rom_name])
                 rom_fav = False
-                fav_button.icon = heart_off_icon
+                fav_button.set_icon_tile(icon_lookup["heart-grey"])
             else:
                 channel.write(["fav_put", "dbput", "fav/" + core_name, rom_name])
                 rom_fav = True
-                fav_button.icon = heart_on_icon
+                fav_button.set_icon_tile(icon_lookup["heart-red"])
     # elif id == "get":
     #     # channel.write(["date", "proc", "date"])
     #     channel.write(["dbget", "dbget", "TESTING"])
@@ -426,8 +335,8 @@ while True:
     
     point = touch.touch_point
     if point:
-        # Touch point needs to be rotated, flipped vertically, and scaled by half
-        point = (int(point[1] / SCALE), int((480 - point[0]) / SCALE))
+        # Touch point needs to be rotated, flipped vertically, and halved
+        point = (point[1] // 2), ((480 - point[0]) // 2)
         for button in buttons:
             if button.contains(point):
                 button.selected = True
@@ -459,41 +368,4 @@ while True:
             elif command[0] == "rom_keys":
                 process_keys(command[1:])
     
-    # tick_count += 1
-    # if tick_count == 80:
-    #     print("Tick")
-    #     tick_count = 0
-    
     time.sleep(0.05)
-
-# # Set up where we'll be fetching data from
-# DATA_SOURCE = "https://www.adafruit.com/api/quotes.php"
-# QUOTE_LOCATION = [0, 'text']
-# AUTHOR_LOCATION = [0, 'author']
-
-# # the current working directory (where this file is)
-# cwd = ("/"+__file__).rsplit('/', 1)[0]
-# pyportal = PyPortal(url=DATA_SOURCE,
-#                     json_path=(QUOTE_LOCATION, AUTHOR_LOCATION),
-#                     status_neopixel=board.NEOPIXEL,
-#                     default_bg=cwd+"/quote_background.bmp",
-#                     text_font=cwd+"/fonts/Arial-ItalicMT-23.bdf",
-#                     text_position=((20, 160),  # quote location
-#                                    (5, 280)), # author location
-#                     text_color=(0xFFFFFF,  # quote text color
-#                                 0x8080FF), # author text color
-#                     text_wrap=(40, # characters to wrap for quote
-#                                0), # no wrap for author
-#                     text_maxlen=(180, 30), # max text size for quote & author
-#                    )
-
-# # speed up projects with lots of text by preloading the font!
-# pyportal.preload_font()
-
-# while True:
-#     try:
-#         value = pyportal.fetch()
-#         print("Response is", value)
-#     except (ValueError, RuntimeError) as e:
-#         print("Some error occured, retrying! -", e)
-#     time.sleep(60)
