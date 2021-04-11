@@ -235,7 +235,7 @@ def switch_date(date):
     date_label.text = date
 
 def process_keys(keys):
-    global core_name, fav_button, heart_on_icon, heart_off_icon, rom_fav, details_label
+    global core_name, fav_button, icon_lookup, rom_fav, details_label
 
     has_key = "has/" + core_name + "/"
     hases = {}
@@ -254,7 +254,7 @@ def process_keys(keys):
                 hases[bits[0]].append(bits[1])
     
     rom_fav = fav
-    fav_button.icon = heart_on_icon if fav else heart_off_icon
+    fav_button.set_icon_tile(icon_lookup["heart-red" if fav else "heart-grey"])
 
     details = []
     for key, value in hases.items():
