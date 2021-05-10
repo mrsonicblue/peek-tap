@@ -37,8 +37,9 @@ class Label(displayio.TileGrid):
                         c = ord(self._text[i])
                         i += 1
                         if c == 10: # newline
-                            y += 1
-                            x = 0
+                            if x > 0:
+                                y += 1
+                                x = 0
                         elif c < 10: # switch font
                             map = c
                         else:
