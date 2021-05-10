@@ -125,7 +125,7 @@ GLYPH_WIDTH = 8
 GLYPH_HEIGHT = 17
 glyphs = displayio.Bitmap(GLYPH_COUNT * GLYPH_WIDTH, GLYPH_HEIGHT, 2)
 
-glyph_list = b'0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-,.:/!() '
+glyph_list = b'0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-,.:/!()\' '
 normal_map = render_bdf.render_bdf("/fonts/gohufont-14.bdf", glyph_list, glyphs, GLYPH_WIDTH, GLYPH_HEIGHT, 1)
 bold_map = render_bdf.render_bdf("/fonts/gohufont-14b.bdf", glyph_list, glyphs, GLYPH_WIDTH, GLYPH_HEIGHT, len(normal_map) + 1)
 font_maps = [normal_map, bold_map]
@@ -234,6 +234,27 @@ def switch_date(date):
 
     date_label.text = date
 
+def detail_sort_key(item):
+    key = item[0]
+    if key == "Year":
+        return "000"
+    if key == "Region":
+        return "001"
+    if key == "Developer":
+        return "002"
+    if key == "Publisher":
+        return "003"
+    if key == "Genre":
+        return "004"
+    if key == "Franchise":
+        return "005"
+    if key == "Rating":
+        return "006"
+    if key == "List":
+        return "007"
+
+    return key
+
 def process_keys(keys):
     global core_name, fav_button, icon_lookup, rom_fav, details_label
 
@@ -256,8 +277,11 @@ def process_keys(keys):
     rom_fav = fav
     fav_button.set_icon_tile(icon_lookup["heart-red" if fav else "heart-grey"])
 
+    hases = [i for i in hases.items()]
+    hases.sort(key=detail_sort_key)
+
     details = []
-    for key, value in hases.items():
+    for key, value in hases:
         details.append("\1" + key)
         details.append("\0" + wrap(", ".join(value), 38, 2))
 
@@ -265,6 +289,19 @@ def process_keys(keys):
 
 switch_core("MENU")
 switch_rom("", False)
+
+# keys = [
+#     'has/MENU/Region/USA',
+#     'has/MENU/Year/2001',
+#     'has/MENU/Developer/Intelligent Games',
+#     'has/MENU/Publisher/Nintendo',
+#     'has/MENU/Genre/Strategy',
+#     'has/MENU/Rating/E',
+#     'has/MENU/List/Best Strategy Games - IGN.com',
+#     'has/MENU/List/Top 25 Games - IGN.com',
+#     'has/MENU/List/V\'s Recommended Games - 4chan'
+# ]
+# process_keys(keys)
 
 had_point = False
 
