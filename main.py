@@ -139,7 +139,7 @@ icons[1].make_transparent(0)
 
 ICON_WIDTH = 18
 ICON_HEIGHT = 16
-icon_list = ['box','cartridge','generic','heart-grey','heart-red','GAMEBOY', "GBA",'Genesis','MENU','NES','SNES','ATARI2600']
+icon_list = ['box','cartridge','generic','heart-grey','heart-red','GAMEBOY', "GBA",'Genesis','MENU','NES','SNES','ATARI2600','horizontal','vertical']
 icon_lookup = {k: v for v, k in enumerate(icon_list)}
 
 def icon_sprite(name, x=0, y=0):
@@ -195,7 +195,37 @@ fav_button = Button(
 )
 doubler.append(fav_button.group)
 
-buttons = [fav_button]
+horz_button = Button(
+    id="horz",
+    x=45,
+    y=206,
+    width=34,
+    height=34,
+    style=Button.RECT,
+    fill_color=BUTTON1,
+    selected_fill=BUTTON2,
+    outline_color=WHITE,
+    selected_outline=WHITE,
+    icon = icon_sprite("horizontal")
+)
+doubler.append(horz_button.group)
+
+vert_button = Button(
+    id="vert",
+    x=90,
+    y=206,
+    width=34,
+    height=34,
+    style=Button.RECT,
+    fill_color=BUTTON1,
+    selected_fill=BUTTON2,
+    outline_color=WHITE,
+    selected_outline=WHITE,
+    icon = icon_sprite("vertical")
+)
+doubler.append(vert_button.group)
+
+buttons = [fav_button, horz_button, vert_button]
 
 touch = adafruit_touchscreen.Touchscreen(
     board.TOUCH_XL,
@@ -323,6 +353,10 @@ def handle_button_press(id):
                 channel.write(["fav_put", "dbput", "fav/" + core_name, rom_name])
                 rom_fav = True
                 fav_button.set_icon_tile(icon_lookup["heart-red"])
+    elif id == "horz":
+        channel.write(["spin_horz", "spin", "h"])
+    elif id == "vert":
+        channel.write(["spin_vert", "spin", "v"])
     # elif id == "get":
     #     # channel.write(["date", "proc", "date"])
     #     channel.write(["dbget", "dbget", "TESTING"])
